@@ -1,2 +1,4 @@
 .*.swp
 log
+rebar.lock
+_build
