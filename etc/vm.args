@@ -25,6 +25,6 @@
 ## Include .beam files for dependencies.
 
 ## Run code at startup.
--eval "application:ensure_all_started(lager)"
+-eval "application:ensure_all_started(erad)"
 
 ## Cookie for distributed erlang (auto-generated)
