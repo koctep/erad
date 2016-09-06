@@ -58,12 +58,12 @@ handle_info(Msg, State) ->
   lager:warning("unhandled info ~p", [Msg]),
   {noreply, State}.
 
-terminate(Reason, #state{socket = Socket} = State) ->
+terminate(Reason, #state{socket = Socket}) ->
   gen_tcp:close(Socket),
   lager:debug("terminating reason ~p", [Reason]),
   'ok'.
 
-code_change(_OldVsn, State, Extra) ->
+code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 send(Socket, File) ->
