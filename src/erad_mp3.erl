@@ -36,32 +36,27 @@ read_frame(File, <<16#ff:8,             % 24-31
                    Original:1,          % 2
                    Emphasis:2           % 0-1
                  >>) ->
-  io:format("reading frame~n"),
+  lager:debug("reading frame"),
   MpegId = mpeg_id(MpegIdMask),
   Layer = layer(LayerMask),
-  BitRate = bit_rate(MpegId, Layer, BitRateMask) * 1000,
+  BitRate = bit_rate(MpegId, Layer, BitRateMask),
   SampleRate = sample_rate(MpegId, SampleRateMask),
-  FrameSize = frame_size(MpegId),
-  FrameLen = frame_len(Layer, Padding, BitRate, SampleRate),
-%  FrameLen = case {(FrameSize * BitRate) div SampleRate,
-%                   (FrameSize * BitRate) rem SampleRate,
-%                   Padding
-%                  }
-%              of
-%                {FL, 0, _} -> FL;
-%                {FL, _, 0} -> FL;
-%                {FL, _, 1} -> FL + 1
-%              end,
-  io:format("frame size  ~p~n", [FrameSize]),
-  io:format("bit rate    ~p~n", [BitRate]),
-  io:format("sample rate ~p~n", [SampleRate]),
-  io:format("frame len   ~p~n", [FrameLen]),
+  FrameSize = frame_size(MpegId, Layer),
+  PaddingSize = padding_size(Layer),
+  FrameLen = (BitRate * 125 * FrameSize) div SampleRate + Padding * PaddingSize - 4,
+  lager:debug("frame size  ~p", [FrameSize]),
+  lager:debug("bit rate    ~p", [BitRate]),
+  lager:debug("sample rate ~p", [SampleRate]),
+  lager:debug("frame len   ~p", [FrameLen]),
+  lager:debug("padding     ~p", [Padding]),
   case file:read(File, FrameLen) of
-    {'ok', Data} -> {'frame', Data};
+    {'ok', Data} ->
+      lager:debug("read ~p", ['_':to_hex(Data)]),
+      {'frame', Data};
     Else -> Else
   end;
 read_frame(File, <<"TAG+">>) ->
-  io:format("reading id3v1~n"),
+  lager:debug("reading id3v1"),
   case file:read(File, 227 - 4) of
     {'ok', Data} ->
       {'id3', Data};
@@ -69,7 +64,7 @@ read_frame(File, <<"TAG+">>) ->
       Else
   end;
 read_frame(File, <<"TAG", Byte:8>>) ->
-  io:format("reading id3~n"),
+  lager:debug("reading id3"),
   case file:read(File, 128 - 4) of
     {'ok', Data} ->
       {'id3', <<Byte:8, Data/binary>>};
@@ -77,11 +72,11 @@ read_frame(File, <<"TAG", Byte:8>>) ->
       Else
   end;
 read_frame(File, <<"ID3", VerH:8>>) ->
-  io:format("reading id3v2~n"),
+  lager:debug("reading id3v2"),
   case file:read(File, 10 - 4) of
     {'ok', <<VerL:8, Flags:8, 0:1, S1:7, 0:1, S2:7, 0:1, S3:7, 0:1, S4:7>>} ->
       <<_E:4, Size:24>> = <<S1:7, S2:7, S3:7, S4:7>>,
-      io:format("id3v2 size is ~p (~p)~n", [Size, _E]),
+      lager:debug("id3v2 size is ~p (~p)", [Size, _E]),
       case file:read(File, Size) of
         {'ok', Data} ->
           {'id3', <<VerH:8, VerL:8, Flags:1, Size:4, Data/binary>>};
@@ -90,7 +85,9 @@ read_frame(File, <<"ID3", VerH:8>>) ->
       end;
     Else ->
       Else
-  end.
+  end;
+read_frame(File, Data) ->
+  lager:alert("unmatched ~p", ['_':to_hex(Data)]).
 
 mpeg_id(2#00) -> throw({{'badarg', 'mpeg_id'}, 2.5});
 mpeg_id(2#10) -> 2;
@@ -100,8 +97,12 @@ layer(2#01) -> 3;
 layer(2#10) -> 2;
 layer(2#11) -> 1.
 
-frame_size(1) -> 1152;
-frame_size(2) -> 576.
+frame_size(1, 1) -> 384;
+frame_size(1, 2) -> 1152;
+frame_size(1, 3) -> 1152;
+frame_size(2, 1) -> 384;
+frame_size(2, 2) -> 1152;
+frame_size(2, 3) -> 576.
 
 slot_size(1) -> 4;
 slot_size(_) -> 1.
@@ -140,9 +141,13 @@ sample_rate(2, 2#00) -> 22050;
 sample_rate(2, 2#01) -> 24000;
 sample_rate(2, 2#11) -> 16000.
 
+padding_size(1) -> 4;
+padding_size(2) -> 1;
+padding_size(3) -> 1.
+
 frame_len(1, Padding, BitRate, SampleRate) ->
-  io:format("padding ~p~n", [Padding]),
+  lager:debug("padding ~p", [Padding]),
   (48 * BitRate) rem SampleRate + Padding * 4;
 frame_len(Layer, Padding, BitRate, SampleRate) when Layer =:= 2 orelse Layer =:= 3 ->
-  io:format("padding ~p~n", [Padding]),
+  lager:debug("padding ~p", [Padding]),
   (144 * BitRate) rem SampleRate + Padding.
