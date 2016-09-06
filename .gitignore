@@ -1,4 +1,6 @@
-.*.swp
+ebin
+deps
 log
-rebar.lock
-_build
+erad.d
+.erlang.mk
+erl_crash.dump
