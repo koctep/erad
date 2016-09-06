@@ -9,5 +9,6 @@
                   lager
                  ]},
   {env, []},
+  {mod, {erad, []}},
   {modules, []}
  ]}.
