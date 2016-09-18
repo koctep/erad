@@ -117,7 +117,13 @@ handle_info({inet_async, ListenSocket, _Ref, {ok, ClientSocket}},
   lager:debug("new connection"),
   inet_db:register_socket(ClientSocket, inet_tcp),
   lager:debug("socket info: ~p", [inet_db:lookup_socket(ClientSocket)]),
-  {ok, _Pid} = Module:accept({tcp, ClientSocket}, Opts),
+  case Module:accept({tcp, ClientSocket}, Opts) of
+    {ok, Pid} when is_pid(Pid) ->
+      'ok';
+    _Error ->
+      lager:error("~s did not accept the socket ~p", [Module, _Error]),
+      gen_tcp:close(ClientSocket)
+  end,
   {ok, _NewRef} = prim_inet:async_accept(ListenSocket, -1),
   {noreply, S};
 handle_info({'EXIT', _Pid, Reason}, S) ->
