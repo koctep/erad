@@ -34,7 +34,7 @@ read_frame(File, <<16#ff:8,             % 24-31
                    _Original:1,          % 2
                    _Emphasis:2           % 0-1
                  >> = Header) ->
-  lager:debug("reading frame"),
+  lager:debug([{debug, 5}], "reading frame"),
   MpegId = mpeg_id(MpegIdMask),
   Layer = layer(LayerMask),
   BitRate = bit_rate(MpegId, Layer, BitRateMask),
@@ -43,25 +43,25 @@ read_frame(File, <<16#ff:8,             % 24-31
   PaddingSize = slot_size(Layer),
   FrameLen = (BitRate * 125 * FrameSize) div SampleRate + Padding * PaddingSize,
   FrameDuration = (FrameSize * 1000) div SampleRate,
-  lager:debug("frame size  ~p", [FrameSize]),
-  lager:debug("bit rate    ~p", [BitRate]),
-  lager:debug("sample rate ~p", [SampleRate]),
-  lager:debug("frame len   ~p", [FrameLen]),
-  lager:debug("padding     ~p", [Padding]),
+  lager:debug([{debug, 5}], "frame size  ~p", [FrameSize]),
+  lager:debug([{debug, 5}], "bit rate    ~p", [BitRate]),
+  lager:debug([{debug, 5}], "sample rate ~p", [SampleRate]),
+  lager:debug([{debug, 5}], "frame len   ~p", [FrameLen]),
+  lager:debug([{debug, 5}], "padding     ~p", [Padding]),
   FrameInfo = #{mpeg_id => MpegId,
                 layer   => Layer,
                 bitrate => BitRate,
                 sample_rate => SampleRate,
-                frame_duration => FrameDuration
+                duration => FrameDuration
                },
   case read(File, FrameLen - 4) of
     {'ok', Data} ->
-      lager:debug("read ~p", ['_':to_hex(Data)]),
+      lager:debug([{debug, 5}], "read ~p", ['_':to_hex(Data)]),
       {'frame', FrameInfo, <<Header/binary, Data/binary>>};
     Else -> Else
   end;
 read_frame(File, <<"TAG+">>) ->
-  lager:debug("reading id3v1"),
+  lager:debug([{debug, 5}], "reading id3v1"),
   case read(File, 227 - 4) of
     {'ok', Data} ->
       {'id3', Data};
@@ -69,7 +69,7 @@ read_frame(File, <<"TAG+">>) ->
       Else
   end;
 read_frame(File, <<"TAG", Byte:8>>) ->
-  lager:debug("reading id3"),
+  lager:debug([{debug, 5}], "reading id3"),
   case read(File, 128 - 4) of
     {'ok', Data} ->
       {'id3', <<Byte:8, Data/binary>>};
@@ -77,11 +77,11 @@ read_frame(File, <<"TAG", Byte:8>>) ->
       Else
   end;
 read_frame(File, <<"ID3", VerH:8>>) ->
-  lager:debug("reading id3v2"),
+  lager:debug([{debug, 5}], "reading id3v2"),
   case read(File, 10 - 4) of
     {'ok', <<VerL:8, Flags:8, 0:1, S1:7, 0:1, S2:7, 0:1, S3:7, 0:1, S4:7>>} ->
       <<_E:4, Size:24>> = <<S1:7, S2:7, S3:7, S4:7>>,
-      lager:debug("id3v2 size is ~p (~p)", [Size, _E]),
+      lager:debug([{debug, 5}], "id3v2 size is ~p (~p)", [Size, _E]),
       case read(File, Size) of
         {'ok', Data} ->
           {'id3', <<VerH:8, VerL:8, Flags:1, Size:4, Data/binary>>};
