@@ -5,18 +5,24 @@
 -export([start_link/0]).
 -export([init/1]).
 
-accept({tcp, Socket}, Opts) ->
-  gen_tcp:controlling_process(Socket, erlang:whereis(?MODULE)),
-  supervisor:start_child(?MODULE, [{tcp, Socket}, Opts]).
+accept({tcp, Socket}, _Opts) ->
+  {ok, {_, Port}} = inet:sockname(Socket),
+  case [Pid  || {{tcp, Port_}, Pid, _, _} <- supervisor:which_children(?MODULE), Port_ == Port] of
+    [Pid] ->
+      erad_transmitter:accept(Pid, {tcp, Socket});
+    _ ->
+      lager:alert("no transmitter for port ~p", [Port]),
+      {error, <<"no transmitter">>}
+  end.
 
 start_link() ->
   supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
-  SupFlags = {simple_one_for_one, 0, 1},
-  Childs = [{'_',
-             {erad_transmitter, accept, []},
-             temporary,
+  SupFlags = {one_for_one, 1, 1000},
+  Childs = [{{tcp, 8005},
+             {erad_transmitter, start_link, []},
+             transient,
              brutal_kill,
              worker,
              []
