@@ -1,6 +1,7 @@
 -module(erad_mp3).
 
 -export([open/1]).
+-export([close/1]).
 -export([read_frame/1]).
 
 -type fd() :: any().
@@ -8,6 +9,9 @@
 -spec open(binary()) -> {'ok', fd()} | {'error', any()}.
 open(Filename) ->
   erad_file:open(Filename).
+
+close(Filename) ->
+  erad_file:close(Filename).
 
 -spec read_frame(fd()) -> {'ok', binary()} | 'eof' | {'error', any()}.
 read_frame(File) ->
