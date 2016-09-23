@@ -23,8 +23,18 @@ accept(Pid, {tcp, Socket}) ->
   {ok, Pid}.
 
 start_link() ->
-  lager:debug("starting"),
-  start_link(["/home/data/music/alarm.mp3"]).
+  start_link([]).
+
+start_link({playlist, Port}) when is_integer(Port) ->
+  start_link({playlist, erlang:integer_to_list(Port)});
+start_link({playlist, SubDir}) ->
+  case code:priv_dir(erad) of
+    {error, bad_name} ->
+      {error, <<"priv dir not found">>};
+    Dir ->
+      Playlist = filelib:wildcard(Dir ++ "/lib/" ++ SubDir ++ "/*.mp3"),
+      start_link(Playlist)
+  end;
 
 start_link(Playlist) ->
   gen_server:start_link(?MODULE, Playlist, []).
