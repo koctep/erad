@@ -12,7 +12,7 @@ start(_StartType, _StartArgs) ->
   lager:debug("starting app"),
   start_link().
 
-stop(State) ->
+stop(_State) ->
   'ok'.
 
 start_link() ->
