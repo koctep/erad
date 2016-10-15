@@ -115,7 +115,7 @@ next_frame(State, Frames, Duration, N) ->
         {ok, File} ->
           next_frame(NewState#state{file = File}, Frames, Duration, N);
         _ ->
-          lager:error("cannot open file ~s", [Filename]),
+          lager:error("cannot open file ~ts", [Filename]),
           next_frame(NewState, Frames, Duration, N)
       end;
     {error, Reason, NewState} ->
