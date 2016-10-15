@@ -6,7 +6,6 @@
 -export([start/2]).
 -export([stop/1]).
 -export([start_link/0]).
--export([listen/1]).
 -export([init/1]).
 
 -define(CHILD(Id, Mod, Args), {Id, {Mod, start_link, Args},
@@ -22,9 +21,6 @@ stop(_State) ->
 start_link() ->
   lager:debug("starting sup"),
   supervisor:start_link({'local', ?MODULE}, ?MODULE, []).
-
-listen(Port) ->
-  erad_connections_sup:listen(Port).
 
 init([]) ->
   Port = get_port(),
