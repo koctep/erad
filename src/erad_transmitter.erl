@@ -3,7 +3,6 @@
 -behaviour(gen_server).
 
 -export([accept/2]).
--export([start_link/0]).
 -export([start_link/1]).
 
 -export([init/1,
@@ -16,28 +15,23 @@
 
 -record(state, {sockets = [], playlist = [], file}).
 
-accept(Pid, {tcp, Socket}) ->
+accept(Pid, Socket) when is_pid(Pid) andalso is_port(Socket) ->
   lager:debug("setting controlling process ~p", [Pid]),
   ok = gen_tcp:controlling_process(Socket, Pid),
   gen_server:cast(Pid, {accept, Socket}),
   {ok, Pid}.
 
-start_link() ->
-  start_link([]).
-
-start_link({playlist, Port}) when is_integer(Port) ->
-  start_link({playlist, erlang:integer_to_list(Port)});
-start_link({playlist, SubDir}) ->
-  case code:priv_dir(erad) of
-    {error, bad_name} ->
-      {error, <<"priv dir not found">>};
-    Dir ->
-      Playlist = filelib:wildcard(Dir ++ "/lib/" ++ SubDir ++ "/*.mp3"),
-      start_link(Playlist)
+start_link(Dir) when is_list(Dir) ->
+  lager:debug("searching for mp3 in ~ts", [Dir]),
+  case filelib:is_dir(Dir) of
+    true ->
+      Playlist = filelib:wildcard(Dir ++ "/*.mp3"),
+      gen_server:start_link(?MODULE, Playlist, []);
+    false ->
+      ignore
   end;
-
-start_link(Playlist) ->
-  gen_server:start_link(?MODULE, Playlist, []).
+start_link(<<_/binary>> = Dir) ->
+  start_link(binary_to_list(Dir)).
 
 init(Playlist) ->
   lager:debug("initializing"),

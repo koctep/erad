@@ -47,9 +47,8 @@ listen(Port) ->
 %%--------------------------------------------------------------------
 init(Port) ->
   Transmitter = ?CHILD(transmitter, erad_transmitter, [{playlist, Port}]),
-  Listener = ?CHILD(listener, tcp_terminator, [{tcp, ?MODULE, Port, {0, 0, 0, 0}, []}]),
   {ok, {{rest_for_one, 5, 10},
-        [Transmitter, Listener]
+        [Transmitter]
        }}.
 
 %%%===================================================================

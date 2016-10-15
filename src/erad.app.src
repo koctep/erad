@@ -8,7 +8,7 @@
                   stdlib,
                   lager
                  ]},
-  {env, []},
+  {env, [{port, 8005}]},
   {mod, {erad, []}},
   {modules, []}
  ]}.

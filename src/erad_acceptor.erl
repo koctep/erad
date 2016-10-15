@@ -1,23 +1,31 @@
--module(erad_connections_sup).
+-module(erad_acceptor).
 
 -behaviour(supervisor).
 
 %% API functions
 -export([accept/2]).
+-export([start_link/1]).
+
 -export([start_link/0]).
 
+-export([init_it/1]).
 %% Supervisor callbacks
 -export([init/1]).
 
--define(CHILD(Id, Dir), {Id, {erad_transmitter, start_link, [Dir]},
-                      transient, 5000, supervisor, [erad_transmitter]}).
+-define(CHILD(Mod), {Mod, {Mod, start_link, []},
+                     temporary, 5000, worker, [Mod]}).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-accept(Socket, Playlist) ->
-  [Pid] = [Pid || {Id, Pid, _, _} <- supervisor:which_children(?MODULE), Playlist =:= Id],
-  erad_transmitter:accept(Pid, Socket).
+accept({tcp, Socket}, []) ->
+  {ok, Pid} = Reply = supervisor:start_child(?MODULE, [Socket]),
+  gen_tcp:controlling_process(Socket, Pid),
+  Pid ! accept,
+  Reply.
+
+start_link(Socket) ->
+  proc_lib:start_link(?MODULE, init_it, [Socket]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -27,7 +35,11 @@ accept(Socket, Playlist) ->
 %% @end
 %%--------------------------------------------------------------------
 start_link() ->
-  supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+
+%%%===================================================================
+%%% Supervisor callbacks
+%%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @private
@@ -43,20 +55,29 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 init([]) ->
-  Childs = get_childs(),
-  {ok, {{one_for_one, 5, 10}, Childs}}.
+    {ok, {{simple_one_for_one, 5, 10}, [?CHILD(?MODULE)]}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-get_childs() ->
-  PrivDir = code:priv_dir(erad),
-  Dirs = filelib:wildcard(PrivDir ++ "/lib/*"),
-  lists:map(fun(Dir) -> child_spec(PrivDir, Dir) end, Dirs).
 
-child_spec(<<_/binary>> = PrivDir, <<_/binary>> = Playlist) ->
-  L = byte_size(PrivDir),
-  <<PrivDir:L/binary, "/lib/", Dir/binary>> = Playlist,
-  ?CHILD(Dir, Playlist);
-child_spec(PrivDir, Dir) ->
-  child_spec(list_to_binary(PrivDir), list_to_binary(Dir)).
+init_it(Socket) when is_port(Socket) ->
+  proc_lib:init_ack({ok, self()}),
+  receive
+    accept ->
+      do_accept(Socket)
+  after 5000 ->
+      {timeout, accept}
+  end.
+
+do_accept(Socket) ->
+  inet:setopts(Socket, [{active, once}]),
+  receive
+    {tcp, Socket, <<"GET /", Path/binary>>} ->
+      [Playlist | _] = binary:split(Path, <<" ">>),
+      lager:debug("trying to connect to ~ts", [Playlist]),
+      erad_connections_sup:accept(Socket, Playlist),
+      normal
+  after 5000 ->
+      {timeout, request}
+  end.

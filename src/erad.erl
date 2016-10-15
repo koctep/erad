@@ -27,8 +27,20 @@ listen(Port) ->
   erad_connections_sup:listen(Port).
 
 init([]) ->
+  Port = get_port(),
   SupFlags = {one_for_one, 0, 1},
-  Childs = [?CHILD(connections, erad_connections_sup, [])
+  Childs = [?CHILD(connections, erad_connections_sup, []),
+            ?CHILD(listener, tcp_terminator, [{tcp, erad_acceptor, Port, {0, 0, 0, 0}, []}]),
+            ?CHILD(acceptor, erad_acceptor, [])
            ],
   lager:debug("initializing sup"),
   {'ok', {SupFlags, Childs}}.
+
+get_port() ->
+  case os:getenv("ERAD_PORT") of
+    false ->
+      {ok, Port} = application:get_env(port),
+      Port;
+    PortStr ->
+      list_to_integer(PortStr)
+  end.
