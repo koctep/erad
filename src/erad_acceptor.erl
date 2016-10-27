@@ -75,8 +75,8 @@ do_accept(Socket) ->
   receive
     {tcp, Socket, <<"GET /", Path/binary>>} ->
       [Playlist | _] = binary:split(Path, <<" ">>),
-      lager:debug("trying to connect to ~ts", [Playlist]),
-      erad_connections_sup:accept(Socket, Playlist),
+      lager:info("trying to connect to ~ts", [Playlist]),
+      erad_connections_sup:accept(Socket, unicode:characters_to_list(Playlist)),
       normal
   after 5000 ->
       {timeout, request}

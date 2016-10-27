@@ -4,6 +4,9 @@
 
 -export([accept/2]).
 -export([start_link/1]).
+-export([next/1]).
+-export([playlist/1]).
+-export([add/2]).
 
 -export([init/1,
          handle_call/3,
@@ -13,7 +16,7 @@
          code_change/3
         ]).
 
--record(state, {sockets = [], playlist = [], file}).
+-record(state, {name, sockets = [], playlist = [], file}).
 
 accept(Pid, Socket) when is_pid(Pid) andalso is_port(Socket) ->
   lager:debug("setting controlling process ~p", [Pid]),
@@ -21,27 +24,38 @@ accept(Pid, Socket) when is_pid(Pid) andalso is_port(Socket) ->
   gen_server:cast(Pid, {accept, Socket}),
   {ok, Pid}.
 
-start_link(Dir) when is_list(Dir) ->
-  lager:debug("searching for mp3 in ~ts", [Dir]),
-  case filelib:is_dir(Dir) of
-    true ->
-      Playlist = filelib:wildcard(Dir ++ "/*.mp3"),
-      gen_server:start_link(?MODULE, Playlist, []);
-    false ->
-      ignore
-  end;
-start_link(<<_/binary>> = Dir) ->
-  start_link(binary_to_list(Dir)).
+start_link([_ | _] = Name) ->
+  LibDir = erad_util:lib_dir(),
+  {ok, Contents} = file:read_file(LibDir ++ "/" ++ Name ++ ".m3u"),
+  Files = re:split(re:replace(Contents, "\r\n", "", [global]), "\n", [{return, binary}]),
+  Playlist = lists:map(maybe_add_dir(LibDir), [unicode:characters_to_list(File) || File <- Files, File /= <<>>]),
+  gen_server:start_link(?MODULE, [Name, Playlist], []);
+start_link(<<_/binary>> = Name) ->
+  start_link(binary_to_list(Name)).
 
-init(Playlist) ->
+next([_ | _ ] = Playlist) ->
+  gen_server:cast({via, erad_connections_sup, Playlist}, {next}).
+
+playlist([_ | _ ] = Playlist) ->
+  gen_server:call({via, erad_connections_sup, Playlist}, {playlist}).
+
+add([_ | _ ] = Playlist, File) ->
+  gen_server:cast({via, erad_connections_sup, Playlist}, {add, File}).
+
+init([Name, Playlist]) ->
   lager:debug("initializing"),
-  State = next_frame(#state{playlist = Playlist}),
+  State = next_frame(#state{name = Name, playlist = Playlist}),
   {ok, State}.
 
+handle_call({playlist}, _From, #state{playlist = Playlist} = State) ->
+  {reply, lists:usort(Playlist), State};
 handle_call(Msg, From, State) ->
   lager:warning("~p sent unhandled call ~p", [From, Msg]),
   {reply, {error, unhandled}, State}.
 
+handle_cast({next}, #state{file = File} = State) ->
+  erad_mp3:close(File),
+  {noreply, State#state{file = undefined}};
 handle_cast({accept, Socket}, #state{sockets = Sockets} = State) ->
   lager:debug("accepting socket"),
   inet:setopts(Socket, [{active, true}]),
@@ -55,6 +69,8 @@ handle_cast({accept, Socket}, #state{sockets = Sockets} = State) ->
                        >>
               ),
   {noreply, State#state{sockets = [Socket | Sockets]}};
+handle_cast({add, File}, #state{playlist = Playlist} = State) ->
+  {noreply, State#state{playlist = Playlist ++ [File]}};
 handle_cast(Msg, State) ->
   lager:warning("unhandled cast ~p", [Msg]),
   {noreply, State}.
@@ -87,7 +103,7 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 next_frame(State) ->
-  next_frame(State, [], 0, 100).
+  next_frame(State, [], 0, 10).
 
 next_frame(State, Frames, Duration, N) when N < 0 ->
   erlang:send_after(Duration, self(), {frames, lists:reverse(Frames)}),
@@ -108,8 +124,8 @@ next_frame(State, Frames, Duration, N) ->
       case erad_mp3:open(Filename) of
         {ok, File} ->
           next_frame(NewState#state{file = File}, Frames, Duration, N);
-        _ ->
-          lager:error("cannot open file ~ts", [Filename]),
+        _Error ->
+          lager:error("cannot open file ~ts: ~p", [Filename, _Error]),
           next_frame(NewState, Frames, Duration, N)
       end;
     {error, Reason, NewState} ->
@@ -123,3 +139,8 @@ get_next_file(#state{playlist = [File | Rest]} = State) ->
   {ok, File, State#state{playlist = NewPlaylist}};
 get_next_file(#state{playlist = []} = State) ->
   {error, <<"playlist is empty">>, State}.
+
+maybe_add_dir(Dir) ->
+  fun([$/ | _ ] = File) -> File;
+    (File) -> unicode:characters_to_list(Dir ++ "/" ++ File)
+  end.

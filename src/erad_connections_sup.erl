@@ -5,19 +5,26 @@
 %% API functions
 -export([accept/2]).
 -export([start_link/0]).
+-export([whereis_name/1]).
+-export([send/2]).
 
 %% Supervisor callbacks
 -export([init/1]).
 
--define(CHILD(Id, Dir), {Id, {erad_transmitter, start_link, [Dir]},
+-define(CHILD(Name), {Name, {erad_transmitter, start_link, [Name]},
                       transient, 5000, supervisor, [erad_transmitter]}).
 
+whereis_name(Playlist) ->
+  [Pid] = [Pid || {Id, Pid, _, _} <- supervisor:which_children(?MODULE), Playlist =:= Id],
+  Pid.
+
+send(Playlist, Msg) ->
+  whereis_name(Playlist) ! Msg.
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 accept(Socket, Playlist) ->
-  [Pid] = [Pid || {Id, Pid, _, _} <- supervisor:which_children(?MODULE), Playlist =:= Id],
-  erad_transmitter:accept(Pid, Socket).
+  erad_transmitter:accept(whereis_name(Playlist), Socket).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -50,13 +57,12 @@ init([]) ->
 %%% Internal functions
 %%%===================================================================
 get_childs() ->
-  PrivDir = code:priv_dir(erad),
-  Dirs = filelib:wildcard(PrivDir ++ "/lib/*"),
-  lists:map(fun(Dir) -> child_spec(PrivDir, Dir) end, Dirs).
+  LibDir = erad_util:lib_dir(),
+  filelib:fold_files(LibDir, "^.*.m3u$", false, fold_child_spec(LibDir), []).
 
-child_spec(<<_/binary>> = PrivDir, <<_/binary>> = Playlist) ->
-  L = byte_size(PrivDir),
-  <<PrivDir:L/binary, "/lib/", Dir/binary>> = Playlist,
-  ?CHILD(Dir, Playlist);
-child_spec(PrivDir, Dir) ->
-  child_spec(list_to_binary(PrivDir), list_to_binary(Dir)).
+fold_child_spec(LibDir) ->
+  fun(Playlist, Acc) ->
+      {match, [Name]} = re:run(Playlist, LibDir ++ "/(.*)\.m3u$", [{capture, all_but_first, list}]),
+      lager:info("playlist name ~s", [Name]),
+      [?CHILD(Name) | Acc]
+  end.
