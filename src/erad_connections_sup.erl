@@ -7,6 +7,7 @@
 -export([start_link/0]).
 -export([whereis_name/1]).
 -export([send/2]).
+-export([playlists/0]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -20,6 +21,9 @@ whereis_name(Playlist) ->
 
 send(Playlist, Msg) ->
   whereis_name(Playlist) ! Msg.
+
+playlists() ->
+  [Id || {Id, _, _, _} <- supervisor:which_children(?MODULE)].
 %%%===================================================================
 %%% API functions
 %%%===================================================================

@@ -7,6 +7,7 @@
 -export([next/1]).
 -export([playlist/1]).
 -export([add/2]).
+-export([play/2]).
 
 -export([init/1,
          handle_call/3,
@@ -33,11 +34,18 @@ start_link([_ | _] = Name) ->
 start_link(<<_/binary>> = Name) ->
   start_link(binary_to_list(Name)).
 
-next([_ | _ ] = Playlist) ->
+next([_ | _] = Playlist) ->
   gen_server:cast({via, erad_connections_sup, Playlist}, {next}).
 
-playlist([_ | _ ] = Playlist) ->
-  gen_server:call({via, erad_connections_sup, Playlist}, {playlist}).
+playlist([_ | _] = Playlist) ->
+  gen_server:call({via, erad_connections_sup, Playlist}, {playlist});
+playlist(<<_/binary>> = Playlist) ->
+  playlist(unicode:characters_to_list(Playlist)).
+
+play([_ | _] = Playlist, No) ->
+  gen_server:cast({via, erad_connections_sup, Playlist}, {play, No});
+play(<<_/binary>> = Playlist, No) ->
+  play(unicode:characters_to_list(Playlist), No).
 
 add([_ | _ ] = Playlist, File) ->
   gen_server:cast({via, erad_connections_sup, Playlist}, {add, File}).
@@ -48,7 +56,8 @@ init([Name, Playlist]) ->
   {ok, State}.
 
 handle_call({playlist}, _From, #state{playlist = Playlist} = State) ->
-  {reply, lists:usort(Playlist), State};
+  lager:debug("returning ~p", [Playlist]),
+  {reply, Playlist, State};
 handle_call(Msg, From, State) ->
   lager:warning("~p sent unhandled call ~p", [From, Msg]),
   {reply, {error, unhandled}, State}.
@@ -71,6 +80,18 @@ handle_cast({accept, Socket}, #state{sockets = Sockets} = State) ->
   {noreply, State#state{sockets = [Socket | Sockets]}};
 handle_cast({add, File}, #state{playlist = Playlist} = State) ->
   {noreply, State#state{playlist = Playlist ++ [File]}};
+handle_cast({play, No}, #state{file = File, playlist = Playlist} = State)
+    when No > 0 andalso No =< length(Playlist) ->
+  Filename = lists:nth(No, Playlist),
+  lager:info("playing ~ts", [Filename]),
+  case erad_mp3:open(Filename) of
+    {ok, NewFile} ->
+      erad_mp3:close(File),
+      {noreply, State#state{file = NewFile}};
+    _Error ->
+      lager:error("cannot open file ~ts", [Filename]),
+      {noreply, State}
+  end;
 handle_cast(Msg, State) ->
   lager:warning("unhandled cast ~p", [Msg]),
   {noreply, State}.
@@ -103,7 +124,7 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 next_frame(State) ->
-  next_frame(State, [], 0, 10).
+  next_frame(State, [], 0, 5).
 
 next_frame(State, Frames, Duration, N) when N < 0 ->
   erlang:send_after(Duration, self(), {frames, lists:reverse(Frames)}),
@@ -114,6 +135,7 @@ next_frame(#state{file = File} = State, Frames, Duration, N) when File /= undefi
       next_frame(State, [Frame | Frames], Duration + FrameDuration, N - 1);
     eof ->
       erad_mp3:close(File),
+      timer:sleep(3000),
       next_frame(State#state{file = undefined}, Frames, Duration, N);
     _ ->
       next_frame(State, Frames, Duration, N)
@@ -121,6 +143,7 @@ next_frame(#state{file = File} = State, Frames, Duration, N) when File /= undefi
 next_frame(State, Frames, Duration, N) ->
   case get_next_file(State) of
     {ok, Filename, NewState} ->
+      lager:info("playing ~ts", [Filename]),
       case erad_mp3:open(Filename) of
         {ok, File} ->
           next_frame(NewState#state{file = File}, Frames, Duration, N);
@@ -133,12 +156,16 @@ next_frame(State, Frames, Duration, N) ->
       NewState
   end.
 
-get_next_file(#state{playlist = [File | Rest]} = State) ->
-  lager:info("starting ~ts", [File]),
-  NewPlaylist = Rest ++ [File],
-  {ok, File, State#state{playlist = NewPlaylist}};
-get_next_file(#state{playlist = []} = State) ->
-  {error, <<"playlist is empty">>, State}.
+get_next_file(#state{playlist = Playlist} = State) ->
+  lager:debug("getting next file"),
+  case erad_strategy:next(Playlist) of
+    {ok, File, NewPlaylist} ->
+      lager:debug("next file is ~ts", [File]),
+      {ok, File, State#state{playlist = NewPlaylist}};
+    _Error ->
+      lager:error("failed get next file: ~p", [_Error]),
+      _Error
+  end.
 
 maybe_add_dir(Dir) ->
   fun([$/ | _ ] = File) -> File;

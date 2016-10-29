@@ -6,7 +6,8 @@
   {applications, [
                   kernel,
                   stdlib,
-                  lager
+                  lager,
+                  cowboy
                  ]},
   {env, [{port, 8005}]},
   {mod, {erad, []}},

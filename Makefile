@@ -3,9 +3,11 @@ PROJECT_DESCRIPTION = New project
 #PROJECT_VERSION = 0.0.1
 
 BUILD_DEPS 	= lager
-DEPS				= _
+DEPS				= _ jsxn whiskey4cowboy
 
-dep__ = git https://github.com/koctep/_.git
+dep__ 							= git https://github.com/koctep/_.git
+dep_jsxn 						= git https://github.com/talentdeficit/jsxn.git
+dep_whiskey4cowboy 	= git git@git.langed.org:whiskey4cowboy.git
 
 CONFIGS = $(foreach c, $(wildcard etc/*.config), -config $(c))
 
