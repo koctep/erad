@@ -24,8 +24,9 @@ start_link() ->
 
 init([]) ->
   Port = get_port(),
-  SupFlags = {one_for_one, 0, 1},
-  Childs = [?CHILD(connections, erad_connections_sup, []),
+  SupFlags = {rest_for_one, 0, 1},
+  Childs = [?CHILD(files, erad_files, []),
+            ?CHILD(connections, erad_connections_sup, []),
             ?CHILD(listener, tcp_terminator, [{tcp, erad_acceptor, Port, {0, 0, 0, 0}, []}]),
             ?CHILD(acceptor, erad_acceptor, []),
             ?CHILD(rest, erad_cow, [])

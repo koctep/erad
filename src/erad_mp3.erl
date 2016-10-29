@@ -10,8 +10,10 @@
 open(Filename) ->
   erad_file:open(Filename).
 
+close({Module, File}) ->
+  Module:close(File);
 close(Filename) ->
-  erad_file:close(Filename).
+  close({file, Filename}).
 
 -spec read_frame(fd()) -> {'ok', binary()} | 'eof' | {'error', any()}.
 read_frame(File) ->
