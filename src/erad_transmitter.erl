@@ -56,7 +56,6 @@ init([Name, Playlist]) ->
   {ok, State}.
 
 handle_call({playlist}, _From, #state{playlist = Playlist} = State) ->
-  lager:debug("returning ~p", [Playlist]),
   {reply, Playlist, State};
 handle_call(Msg, From, State) ->
   lager:warning("~p sent unhandled call ~p", [From, Msg]),
