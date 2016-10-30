@@ -34,7 +34,7 @@ read(Pid, Len) ->
 
 -record(state, {file, buffer = <<>>}).
 
--define(BUFFER_SIZE, 65536).
+-define(BUFFER_SIZE, 8192*64).
 %%%===================================================================
 %%% API functions
 %%%===================================================================
@@ -113,6 +113,11 @@ handle_call({read, Len}, From, #state{buffer = Buffer} = State)
       lager:debug("all is, going futher"),
       {noreply, State#state{buffer = Rest}}
   end;
+handle_call({read, Len}, From, #state{buffer = Buffer, file = File} = State)
+    when Len > ?BUFFER_SIZE ->
+  BufferSize = get_read_size(Len, 0),
+  {ok, Data} = file:read(File, BufferSize),
+  handle_call({read, Len}, From, State#state{buffer = <<Buffer/binary, Data/binary>>});
 handle_call({read, _Len}, _From, #state{buffer = Data} = State) ->
   {reply, {ok, Data}, State#state{buffer = <<>>}};
 handle_call(_Request, _From, State) ->
@@ -179,3 +184,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+get_read_size(0, N) ->
+  1 bsl N;
+get_read_size(L, N) ->
+  get_read_size(L bsr 1, N + 1).
