@@ -28,7 +28,7 @@ accept(Pid, Socket) when is_pid(Pid) andalso is_port(Socket) ->
 start_link([_ | _] = Name) ->
   LibDir = erad_util:lib_dir(),
   {ok, Contents} = file:read_file(LibDir ++ "/" ++ Name ++ ".m3u"),
-  Files = re:split(re:replace(Contents, "\r\n", "", [global]), "\n", [{return, binary}]),
+  Files = re:split(re:replace(Contents, "\r\n", "\n", [global]), "\n", [{return, binary}]),
   Playlist = lists:map(maybe_add_dir(LibDir), [unicode:characters_to_list(File) || File <- Files, File /= <<>>]),
   gen_server:start_link(?MODULE, [Name, Playlist], []);
 start_link(<<_/binary>> = Name) ->
