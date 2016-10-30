@@ -123,7 +123,7 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 next_frame(State) ->
-  next_frame(State, [], 0, 5).
+  next_frame(State, [], 0, 100).
 
 next_frame(State, Frames, Duration, N) when N < 0 ->
   erlang:send_after(Duration, self(), {frames, lists:reverse(Frames)}),
@@ -134,7 +134,6 @@ next_frame(#state{file = File} = State, Frames, Duration, N) when File /= undefi
       next_frame(State, [Frame | Frames], Duration + FrameDuration, N - 1);
     eof ->
       erad_mp3:close(File),
-      timer:sleep(3000),
       next_frame(State#state{file = undefined}, Frames, Duration, N);
     _ ->
       next_frame(State, Frames, Duration, N)
