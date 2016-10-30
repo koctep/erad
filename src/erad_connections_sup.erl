@@ -23,7 +23,7 @@ send(Playlist, Msg) ->
   whereis_name(Playlist) ! Msg.
 
 playlists() ->
-  [Id || {Id, _, _, _} <- supervisor:which_children(?MODULE)].
+  lists:sort([Id || {Id, _, _, _} <- supervisor:which_children(?MODULE)]).
 %%%===================================================================
 %%% API functions
 %%%===================================================================
